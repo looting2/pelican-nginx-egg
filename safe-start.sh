@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-SERVER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)" || exit 1
+SERVER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-./safe-start.sh}")" && pwd -P)" || exit 1
 cd -- "$SERVER_DIR" || exit 1
 
 clean_logs() {
@@ -35,18 +35,18 @@ clean_logs() {
     esac
 
     echo "[Logcleaner] Cleaning regular .log files only; runtime files are preserved."
-    while IFS= read -r -d '' file; do
+    while IFS= read -r -d "" file; do
         # Recheck the type before truncating; do not follow log symlinks.
         [[ -f "$file" && ! -L "$file" ]] || continue
         if [[ "$dry_run" == "true" || "$dry_run" == "1" ]]; then
-            printf '[Logcleaner][DRY-RUN] Would truncate: %s\n' "$file"
+            printf "[Logcleaner][DRY-RUN] Would truncate: %s\n" "$file"
         else
-            printf '[Logcleaner] Truncating: %s\n' "$file"
+            printf "[Logcleaner] Truncating: %s\n" "$file"
             # Preserve the inode so running services can keep writing and space is reclaimed.
             truncate --no-create --size=0 -- "$file" ||
-                printf '[Logcleaner] Could not truncate: %s\n' "$file"
+                printf "[Logcleaner] Could not truncate: %s\n" "$file"
         fi
-    done < <(find -P "$log_dir" -type f -name '*.log' \
+    done < <(find -P "$log_dir" -type f -name "*.log" \
         \( -size "+${max_size}M" -o -mtime "+${max_age}" \) -print0)
 }
 
