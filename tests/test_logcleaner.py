@@ -1,8 +1,6 @@
-import base64
 import json
 import os
 from pathlib import Path
-import shlex
 import shutil
 import socket
 import subprocess
@@ -19,7 +17,7 @@ STARTUP = json.loads((REPOSITORY / "egg-pelican-nginx.json").read_text())[
 
 class LogCleanerTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(dir=REPOSITORY)
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         (self.root / "logs").mkdir()
@@ -45,10 +43,9 @@ class LogCleanerTests(unittest.TestCase):
         if entrypoint:
             environment["STARTUP"] = STARTUP
             command = [
-                "bash", "-c",
-                "MODIFIED_STARTUP=$(echo -e ${STARTUP} | "
-                "sed -e 's/{{/${/g' -e 's/}}/}/g'); eval ${MODIFIED_STARTUP}",
+                "bash", str(REPOSITORY / "entrypoint.sh"),
             ]
+            environment["HOME"] = str(self.root)
         result = subprocess.run(
             command,
             cwd=self.root,
@@ -61,16 +58,10 @@ class LogCleanerTests(unittest.TestCase):
         self.assertIn("upstream-cleaner=0", result.stdout)
         return result
 
-    def test_embedded_startup_matches_wrapper(self):
-        command = shlex.split(STARTUP)
-        self.assertEqual(command[:2], ["bash", "-c"])
-        self.assertNotIn("\n", STARTUP)
-        self.assertTrue(command[2].startswith("$(printf %s "))
-        payload = command[2].split()[2]
-        self.assertEqual(
-            base64.b64decode(payload).decode(),
-            (REPOSITORY / "safe-start.sh").read_text(),
-        )
+    def test_default_startup_uses_installed_wrapper(self):
+        self.assertEqual(STARTUP, "bash ./safe-start.sh")
+        installer = (REPOSITORY / "scripts/install-runtime.sh").read_text()
+        self.assertIn('"$source_dir/safe-start.sh"', installer)
 
     def test_image_entrypoint_preprocessing_preserves_startup(self):
         log = self.root / "logs" / "access.log"

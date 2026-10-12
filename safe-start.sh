@@ -54,6 +54,6 @@ if [[ "${LOGCLEANER_STATUS:-false}" == "true" || "${LOGCLEANER_STATUS:-false}" =
     clean_logs
 fi
 
-# Keep the upstream cleaner disabled, including after an auto-update replaces modules.
+# Cleanup is owned by this wrapper, never by a second module.
 export LOGCLEANER_STATUS=0
 exec bash "$SERVER_DIR/start-modules.sh"
