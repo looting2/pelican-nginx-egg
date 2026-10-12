@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 from pathlib import Path
@@ -29,7 +30,7 @@ class LogCleanerTests(unittest.TestCase):
             'exit "${TEST_STARTUP_EXIT:-0}"\n'
         )
 
-    def run_startup(self, inline=False, **settings):
+    def run_startup(self, inline=False, entrypoint=False, **settings):
         environment = {
             **os.environ,
             "LOGCLEANER_STATUS": "1",
@@ -40,8 +41,16 @@ class LogCleanerTests(unittest.TestCase):
             "TEST_STARTUP_EXIT": "0",
             **settings,
         }
+        command = ["bash", "-c", STARTUP] if inline else ["bash", "./safe-start.sh"]
+        if entrypoint:
+            environment["STARTUP"] = STARTUP
+            command = [
+                "bash", "-c",
+                "MODIFIED_STARTUP=$(echo -e ${STARTUP} | "
+                "sed -e 's/{{/${/g' -e 's/}}/}/g'); eval ${MODIFIED_STARTUP}",
+            ]
         result = subprocess.run(
-            ["bash", "-c", STARTUP] if inline else ["bash", "./safe-start.sh"],
+            command,
             cwd=self.root,
             env=environment,
             capture_output=True,
@@ -55,7 +64,20 @@ class LogCleanerTests(unittest.TestCase):
     def test_embedded_startup_matches_wrapper(self):
         command = shlex.split(STARTUP)
         self.assertEqual(command[:2], ["bash", "-c"])
-        self.assertEqual(command[2], (REPOSITORY / "safe-start.sh").read_text())
+        self.assertNotIn("\n", STARTUP)
+        self.assertTrue(command[2].startswith("$(printf %s "))
+        payload = command[2].split()[2]
+        self.assertEqual(
+            base64.b64decode(payload).decode(),
+            (REPOSITORY / "safe-start.sh").read_text(),
+        )
+
+    def test_image_entrypoint_preprocessing_preserves_startup(self):
+        log = self.root / "logs" / "access.log"
+        log.write_text("old data")
+        self.run_startup(entrypoint=True)
+        self.assertEqual(log.read_bytes(), b"")
+        self.run_startup(entrypoint=True, TEST_STARTUP_EXIT="7")
 
     def test_runtime_files_and_open_log_survive(self):
         for inline in (False, True):

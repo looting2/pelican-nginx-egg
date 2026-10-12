@@ -82,6 +82,11 @@ New servers use the embedded safe startup command without needing a separate
 wrapper upload. Do not revert to `./start-modules.sh` with cleanup enabled, as
 that bypasses this protection.
 
+The embedded command carries a base64-encoded copy of `safe-start.sh` because
+the image entrypoint flattens startup whitespace. Keep that payload synchronized
+with the readable script when editing it; the regression tests verify this and
+exercise the image's startup preprocessing.
+
 Regression tests: `python3 -m unittest discover -s tests -v`.
 
 ### Cloudflare Tunnel Setup
