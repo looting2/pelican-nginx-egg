@@ -3,8 +3,8 @@
         "version": "PLCN_v3",
         "update_url": null
     },
-    "name": "Nginx Cloudflare",
-    "author": "Vava22",
+    "name": "Test Nginx",
+    "author": "hoechstn@gmail.com",
     "description": "Independent Pelican Nginx/PHP 8.2–8.5 runtime with Git, Composer, Cron, optional ionCube, Certbot, WordPress and Cloudflare Tunnel. Maintained by looting2; MIT runtime originally by Ym0T, Pelican adaptation by Vava22.",
     "docker_images": {
         "Nginx PHP 8.5": "ghcr.io/looting2/pelican-nginx-egg:8.5-latest",
