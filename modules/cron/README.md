@@ -87,6 +87,16 @@ This module uses a **custom cron engine** written in Bash that:
 4. 📝 **Logs all activity** to dedicated log files
 5. 🚀 **Executes commands** with full shell capabilities
 
+The five time fields support numeric values, `*`, inclusive ranges (`1-5`),
+comma lists (`0,15,30,45`), and positive steps (`*/6`, `1-23/2`).
+A numeric step such as `5/10` runs from 5 through the field's maximum.
+Values must be in the field's normal cron range; steps are 1–99.
+Sunday can be `0` or `7`. If both day-of-month and day-of-week are restricted,
+either may match; if either starts with `*`, both must match.
+Invalid fields (including names such as `MON` and shortcuts such as `@daily`)
+are logged and skipped. Commands are executed by Bash, so only trusted users
+should edit the crontab.
+
 ## Egg JSON Configuration
 
 Add these variables to your `egg-nginx-v2.json`:
