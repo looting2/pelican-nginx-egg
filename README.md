@@ -16,7 +16,7 @@ not the original repository, images or version service.
 - 📦 **Composer Module**: Installs packages from `composer.json` or a fallback variable
 - 🔐 **ionCube Loader**: Auto-detected and enabled for encrypted PHP
 - 🌐 **Cloudflare Tunnel**: Environment-token configuration and connection checks
-- 🚀 **PHP-NGINX Startup**: Auto-detects PHP-FPM version, runs NGINX in foreground
+- 🚀 **PHP-NGINX Startup**: Auto-detects PHP-FPM version, supervises both foreground services
 - 🖥️ **Multi-arch support**: AMD64 & ARM64
 - 🎯 **Selectable PHP Versions**:
   - ✅ 8.5
@@ -121,6 +121,37 @@ startup whitespace and converts Pelican `{{VARIABLE}}` placeholders to shell
 environment-variable references without flattening the command.
 
 Regression tests: `python3 -m unittest discover -s tests -v`.
+
+### Troubleshooting HTTP 403 and 502
+
+These errors describe different failures:
+
+- `directory index of "/home/container/www/" is forbidden` normally means the
+  configured document root has no usable `index.html`, `index.htm`, or `index.php`.
+  Check that your site's entry point is in `www` and readable by the container
+  user. For applications with a `public/` entry point, set the Nginx document root
+  to that directory and check the application's routing configuration. Do not
+  enable directory listing or use world-writable permissions to hide this error.
+- `connect() to unix:/home/container/tmp/php-fpm.sock failed (111: Connection refused)`
+  means Nginx could not connect to a listening PHP-FPM process at that socket.
+  A socket file can remain after FPM dies; its existence does not prove FPM is
+  running. Check the panel console and `logs/php-fpm.log`, and verify that the
+  pool's `listen` and Nginx's `fastcgi_pass` use the same address. Also check the
+  panel/Wings logs for memory-limit kills if FPM disappears after hours of uptime.
+
+Startup now validates both configurations, keeps PHP-FPM in the foreground with
+stderr visible in the console, and stops both services if either exits. This
+prevents Nginx from remaining online indefinitely with a dead FPM master; it does
+not repair an application/configuration error or establish why FPM previously
+exited. Configure the panel's restart policy as appropriate after fixing the cause.
+
+For an existing server, back up and replace `modules/nginx/start.sh` with this
+repository's version, keep your site and configurations, and restart using
+`bash ./safe-start.sh`. No image rebuild or reinstall is needed on the documented
+owned images. Reinstall and release updates preserve existing Nginx/PHP
+configuration, so document-root or socket-address corrections must be applied
+manually. If the failure persists, share the FPM startup/exit messages and relevant
+pool settings, with credentials and application secrets removed.
 
 ### Release updates
 

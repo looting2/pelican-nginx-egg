@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
 import unittest
 
 
@@ -95,8 +96,17 @@ esac
         for path in BUNDLE:
             if path != "scripts":
                 self.assertTrue((self.root / path).exists(), path)
-        self.executable("php-fpm8.4", 'printf "php=%s\\n" "$*"\n')
-        self.executable("nginx", 'printf "nginx=%s\\n" "$*"\nexit 7\n')
+        self.executable("php-fpm8.4", """
+printf "php=%s\\n" "$*"
+[[ " $* " != *" --test "* ]] || exit 0
+trap 'echo php-stopped; exit 0' TERM
+while true; do sleep 0.1; done
+""")
+        self.executable("nginx", """
+printf "nginx=%s\\n" "$*"
+[[ " $* " != *" -t "* ]] || exit 0
+exit 7
+""")
         result = self.run_script(
             REPOSITORY / "entrypoint.sh", check=False,
             STARTUP=EGG["startup_commands"]["Default"],
@@ -109,7 +119,110 @@ esac
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertIn("Services successfully launched", result.stdout)
         self.assertIn("nginx=-c", result.stdout)
+        self.assertIn("--nodaemonize --force-stderr", result.stdout)
+        self.assertIn("php-stopped", result.stdout)
         self.assertTrue((self.root / "php/sessions").is_dir())
+
+    def start_services(self):
+        return self.run_script(
+            self.root / "safe-start.sh", check=False,
+            IMAGE_PHP_VERSION="8.4", PHP_VERSION="8.4",
+            PHP_INI=str(self.root / "php/php.ini"),
+            PHP_FPM_CONF=str(self.root / "php/php-fpm.conf"),
+            NGINX_CONF=str(self.root / "nginx/nginx.conf"),
+            NGINX_PREFIX=str(self.root),
+        )
+
+    def test_fpm_configuration_error_is_visible_and_prevents_nginx(self):
+        self.install()
+        self.executable("php-fpm8.4", 'echo "invalid pool configuration" >&2\nexit 78\n')
+        self.executable("nginx", 'touch "$HOME/nginx-started"\n')
+        result = self.start_services()
+        self.assertEqual(result.returncode, 78)
+        self.assertIn("invalid pool configuration", result.stderr)
+        self.assertFalse((self.root / "nginx-started").exists())
+
+    def test_fpm_startup_failure_prevents_nginx_launch(self):
+        self.install()
+        self.executable("php-fpm8.4", """
+[[ " $* " != *" --test "* ]] || exit 0
+echo "cannot bind socket" >&2
+exit 70
+""")
+        self.executable("nginx", """
+[[ " $* " != *" -t "* ]] || exit 0
+touch "$HOME/nginx-started"
+""")
+        result = self.start_services()
+        self.assertEqual(result.returncode, 70)
+        self.assertIn("cannot bind socket", result.stderr)
+        self.assertFalse((self.root / "nginx-started").exists())
+        self.assertNotIn("Services successfully launched", result.stdout)
+
+    def test_fpm_exit_after_startup_stops_nginx(self):
+        self.install()
+        self.executable("php-fpm8.4", """
+[[ " $* " != *" --test "* ]] || exit 0
+while [[ ! -f "$HOME/nginx-started" ]]; do sleep 0.1; done
+sleep 0.1
+echo "FPM master failed" >&2
+exit 9
+""")
+        self.executable("nginx", """
+[[ " $* " != *" -t "* ]] || exit 0
+trap 'echo nginx-stopped; exit 0' TERM
+touch "$HOME/nginx-started"
+while true; do sleep 0.1; done
+""")
+        result = self.start_services()
+        self.assertEqual(result.returncode, 9, result.stderr)
+        self.assertIn("nginx-stopped", result.stdout)
+        self.assertIn("FPM master failed", result.stderr)
+        self.assertIn("stopping both services", result.stderr)
+
+    def test_nginx_configuration_failure_prevents_fpm_launch(self):
+        self.install()
+        self.executable("php-fpm8.4", """
+[[ " $* " != *" --test "* ]] || exit 0
+touch "$HOME/php-started"
+""")
+        self.executable("nginx", 'echo "invalid nginx configuration" >&2\nexit 1\n')
+        result = self.start_services()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("invalid nginx configuration", result.stderr)
+        self.assertFalse((self.root / "php-started").exists())
+
+    def test_shutdown_signal_stops_both_services(self):
+        self.install()
+        for binary, service, test_flag in (
+            ("php-fpm8.4", "php", "--test"), ("nginx", "nginx", "-t"),
+        ):
+            self.executable(binary, f"""
+[[ " $* " != *" {test_flag} "* ]] || exit 0
+trap 'touch "$HOME/{service}-stopped"; exit 0' TERM
+touch "$HOME/{service}-started"
+while true; do sleep 0.1; done
+""")
+        process = subprocess.Popen(
+            ["bash", str(self.root / "safe-start.sh")], cwd=self.root,
+            env={**self.environment, "PHP_VERSION": "8.4", "IMAGE_PHP_VERSION": "8.4"},
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while not (self.root / "nginx-started").exists():
+                if process.poll() is not None or time.monotonic() >= deadline:
+                    self.fail("Services failed to start")
+                time.sleep(0.05)
+            process.terminate()
+            stdout, stderr = process.communicate(timeout=5)
+            self.assertEqual(process.returncode, 0, stdout + stderr)
+            for service in ("php", "nginx"):
+                self.assertTrue((self.root / f"{service}-stopped").exists())
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                process.communicate(timeout=5)
 
     def test_mismatched_image_version_fails_before_service_launch(self):
         self.install()

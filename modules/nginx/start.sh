@@ -36,22 +36,40 @@ else
   exit 1
 fi
 
-# Start PHP-FPM
+# Validate both configurations before starting either service.
+"$PHP_FPM_BIN" -c "$PHP_INI" --fpm-config "$PHP_FPM_CONF" --test
+nginx -t -c "$NGINX_CONF" -p "$NGINX_PREFIX" -e stderr
+
+php_pid=""
+nginx_pid=""
+stop_services() {
+  trap - EXIT
+  [[ -z "$php_pid" ]] || kill -TERM "$php_pid" 2>/dev/null || true
+  [[ -z "$nginx_pid" ]] || kill -TERM "$nginx_pid" 2>/dev/null || true
+  [[ -z "$php_pid" ]] || wait "$php_pid" 2>/dev/null || true
+  [[ -z "$nginx_pid" ]] || wait "$nginx_pid" 2>/dev/null || true
+}
+trap stop_services EXIT
+trap 'exit 0' TERM INT
+
+# Keep the FPM master attached so its exit cannot leave Nginx serving 502s.
 header "[Startup] Starting PHP-FPM"
 echo -e "${WHITE}[Startup] Launching ${PHP_FPM_BIN} (PHP ${PHP_VERSION})${NC}"
 "$PHP_FPM_BIN" \
   -c "$PHP_INI" \
   --fpm-config "$PHP_FPM_CONF" \
-  --daemonize > /dev/null 2>&1 || {
-    echo -e "${RED}[Startup] ERROR: Failed to launch ${PHP_FPM_BIN}. Please check that your PHP_VERSION matches the installed php-fpm binary.${NC}"
-    exit 1
-  }
-
-# Success message
-echo -e "${GREEN}[Startup] Services successfully launched!${NC}"
+  --nodaemonize --force-stderr &
+php_pid=$!
 
 # Brief pause
 sleep 1
+if ! kill -0 "$php_pid" 2>/dev/null; then
+  status=0
+  wait "$php_pid" || status=$?
+  echo "[Startup] ERROR: PHP-FPM exited during startup (status $status); check its console output and logs/php-fpm.log." >&2
+  [[ "$status" -ne 0 ]] || status=1
+  exit "$status"
+fi
 
 # Copyright footer
 echo -e " "
@@ -63,4 +81,21 @@ echo -e "\033[1;36mSee the LICENSE file for details.\033[0m"
 echo -e "\033[0;34m───────────────────────────────────────────────\033[0m"
 
 # Start NGINX
-exec nginx -c "$NGINX_CONF" -p "$NGINX_PREFIX" -e stderr
+nginx -c "$NGINX_CONF" -p "$NGINX_PREFIX" -e stderr &
+nginx_pid=$!
+echo -e "${GREEN}[Startup] Services successfully launched!${NC}"
+
+status=0
+while kill -0 "$php_pid" 2>/dev/null && kill -0 "$nginx_pid" 2>/dev/null; do
+  sleep 0.5
+done
+if ! kill -0 "$php_pid" 2>/dev/null; then
+  service="PHP-FPM"
+  wait "$php_pid" || status=$?
+else
+  service="Nginx"
+  wait "$nginx_pid" || status=$?
+fi
+echo "[Startup] ERROR: $service exited (status $status); stopping both services. Check console output and logs/php-fpm.log." >&2
+[[ "$status" -ne 0 ]] || status=1
+exit "$status"
