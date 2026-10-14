@@ -19,8 +19,8 @@ not the original repository, images or version service.
 - 🚀 **PHP-NGINX Startup**: Auto-detects PHP-FPM version, supervises both foreground services
 - 🖥️ **Multi-arch support**: AMD64 & ARM64
 - 🎯 **Selectable PHP Versions**:
-  - ✅ 8.5
-  - ✅ 8.4
+  - ✅ 8.4 (default)
+  - ✅ 8.5 (optional)
   - ☑️ 8.3 (security-only)
   - ☑️ 8.2 (security-only)
   - ❌ 8.1 (EOL)
@@ -57,8 +57,8 @@ independence from the original egg does not mean offline installation.
 2. In your **Pelican Panel**, navigate to **Nests** in the sidebar.
 3. Click **Import Egg**.
 4. Create a new server and select the **Pelican Nginx** egg.
-5. Choose the Docker image matching your desired PHP version.
-6. Fill in all required variables, including whether **WordPress** is desired and the PHP version field (must be set explicitly).
+5. Choose the Docker image matching your desired PHP version (8.4 is listed first).
+6. Fill in all required variables, including whether **WordPress** is desired and the PHP version field (defaults to 8.4; change it when selecting another image).
 
 The installer resolves this repository's default-branch commit, downloads its
 archive, extracts only the runtime bundle, and installs `nginx/`, `php/`, all `modules/`, `start-modules.sh`,
@@ -74,7 +74,7 @@ page is created at `www/index.php` (not a public `phpinfo()` page).
 | :--- | :--- | :--- |
 | `AUTOUPDATE_STATUS` | `1` | Enable (`1`) or disable (`0`) auto-update checks |
 | `AUTOUPDATE_FORCE` | `0` | Opt in to applying released runtime scripts (`1`) or just check (`0`) |
-| `PHP_VERSION` | - | **Required**. Must match the Docker image tag (e.g., `8.4`) |
+| `PHP_VERSION` | `8.4` | **Required**. Must match the Docker image tag |
 | `WORDPRESS` | `0` | Set to `1` to install WordPress automatically |
 | `LOGCLEANER_STATUS` | `1` | Enable (`1`/`true`) safe startup log cleanup; disable with `0`/`false` |
 | `CLOUDFLARED_STATUS` | `0` | Enable Cloudflare Tunnel (`1`) |
@@ -121,6 +121,24 @@ startup whitespace and converts Pelican `{{VARIABLE}}` placeholders to shell
 environment-variable references without flattening the command.
 
 Regression tests: `python3 -m unittest discover -s tests -v`.
+
+### Compare PHP 8.4 with 8.5 on an existing server
+
+PHP 8.4 is the egg default for comparing the reported overnight failures. This
+does not establish that PHP 8.5 caused them; 8.5 remains available.
+
+1. Back up your server files and note the current image and startup settings.
+2. Stop the server and select `ghcr.io/looting2/pelican-nginx-egg:8.4-latest`
+   as its Docker image in Pelican. Set the server's `PHP_VERSION` to `8.4` too.
+   Changing only the variable does not install or switch PHP inside an 8.5 image.
+3. Check that the application supports PHP 8.4 and that custom PHP configuration
+   does not reference 8.5-only extension paths.
+4. Start the server and confirm the console reports `php-fpm8.4 (PHP 8.4)`.
+   Keep the workload, memory limit and other settings unchanged, then test beyond
+   the previous overnight failure window and compare console/host logs.
+
+Importing the updated egg does not switch an existing server's image or variables.
+No reinstall is needed; keep your site, Nginx/PHP configuration and supervisor.
 
 ### Troubleshooting HTTP 403 and 502
 

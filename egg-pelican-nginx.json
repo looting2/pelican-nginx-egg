@@ -7,8 +7,8 @@
     "author": "hoechstn@gmail.com",
     "description": "Independent Pelican Nginx/PHP 8.2–8.5 runtime with Git, Composer, Cron, optional ionCube, Certbot, WordPress and Cloudflare Tunnel. Maintained by looting2; MIT runtime originally by Ym0T, Pelican adaptation by Vava22.",
     "docker_images": {
-        "Nginx PHP 8.5": "ghcr.io/looting2/pelican-nginx-egg:8.5-latest",
         "Nginx PHP 8.4": "ghcr.io/looting2/pelican-nginx-egg:8.4-latest",
+        "Nginx PHP 8.5": "ghcr.io/looting2/pelican-nginx-egg:8.5-latest",
         "Nginx PHP 8.3": "ghcr.io/looting2/pelican-nginx-egg:8.3-latest",
         "Nginx PHP 8.2": "ghcr.io/looting2/pelican-nginx-egg:8.2-latest"
     },
@@ -295,9 +295,9 @@
         {
             "sort": null,
             "name": "PHP Version",
-            "description": "Required PHP version (8.2, 8.3, 8.4 or 8.5). Must match the selected image.",
+            "description": "Required PHP version (8.2, 8.3, 8.4 or 8.5). Defaults to 8.4; must match the selected image.",
             "env_variable": "PHP_VERSION",
-            "default_value": "",
+            "default_value": "8.4",
             "user_viewable": true,
             "user_editable": true,
             "rules": [

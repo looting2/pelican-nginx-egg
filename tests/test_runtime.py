@@ -91,6 +91,15 @@ esac
         force = next(v for v in EGG["variables"] if v["env_variable"] == "AUTOUPDATE_FORCE")
         self.assertEqual(force["default_value"], "0")
 
+    def test_php_84_is_the_default_image_and_version(self):
+        self.assertEqual(
+            next(iter(EGG["docker_images"].values())),
+            "ghcr.io/looting2/pelican-nginx-egg:8.4-latest",
+        )
+        php = next(v for v in EGG["variables"] if v["env_variable"] == "PHP_VERSION")
+        self.assertEqual(php["default_value"], "8.4")
+        self.assertIn("ARG PHP_VERSION=8.4", (REPOSITORY / "Dockerfile").read_text())
+
     def test_bundle_install_and_actual_startup(self):
         self.install()
         for path in BUNDLE:
