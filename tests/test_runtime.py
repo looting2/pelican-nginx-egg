@@ -273,6 +273,8 @@ fi
         self.assertIn("IMAGE_PHP_VERSION=${PHP_VERSION}", dockerfile)
         self.assertIn("openssh-client", dockerfile)
         self.assertIn("sshpass", dockerfile)
+        self.assertIn("msmtp-mta", dockerfile)
+        self.assertIn("test -x /usr/sbin/sendmail", dockerfile)
         self.assertNotIn("policy.xml", dockerfile)
         self.assertIn('php: ["8.2", "8.3", "8.4", "8.5"]', workflow)
         self.assertIn("platforms: linux/amd64,linux/arm64", workflow)
@@ -282,6 +284,19 @@ fi
         for instruction in dockerfile.replace("\\\n", "").splitlines():
             if instruction.startswith("RUN "):
                 subprocess.run(["sh", "-n", "-c", instruction[4:]], check=True)
+
+    def test_php_mail_uses_sendmail_with_private_smtp_configuration(self):
+        php_ini = (REPOSITORY / "php/php.ini").read_text()
+        settings = {}
+        for line in php_ini.splitlines():
+            key, separator, value = line.partition("=")
+            if separator and not key.lstrip().startswith(";"):
+                settings[key.strip()] = value.strip().strip('"')
+        self.assertEqual(
+            settings["sendmail_path"],
+            "/usr/sbin/sendmail --file=/home/container/.msmtprc -t -i",
+        )
+        self.assertNotIn("mail", {name.strip() for name in settings["disable_functions"].split(",")})
 
     def test_proc_open_is_not_disabled_by_default(self):
         php_ini = (REPOSITORY / "php/php.ini").read_text()

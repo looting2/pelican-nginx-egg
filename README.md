@@ -113,6 +113,57 @@ verify remote host keys using a trusted `known_hosts` file; do not disable host
 key checking. Only permit subprocess execution for trusted application code,
 and never pass untrusted input to a shell command.
 
+### PHP mail() via SMTP
+
+The runtime image includes `msmtp-mta`, which provides `/usr/sbin/sendmail` for
+PHP's built-in `mail()` function. No separate PHPMailer library or mail daemon is
+required. You still need an SMTP provider; installing the transport alone does
+not configure email delivery.
+
+Create `/home/container/.msmtprc` (outside the public web directory) with your
+provider's settings, for example:
+
+```ini
+defaults
+auth on
+tls on
+tls_starttls on
+tls_trust_file /etc/ssl/certs/ca-certificates.crt
+
+account default
+host smtp.example.com
+port 587
+from sender@example.com
+user sender@example.com
+passwordeval "cat /home/container/.smtp-password"
+```
+
+Store only your SMTP password in `/home/container/.smtp-password`. Both files
+must be owned by the container user and have permissions `0600`. Never place
+credentials in `/home/container/www`, commit them, or disable TLS certificate
+verification. For providers using implicit TLS on port 465, set `port 465` and
+`tls_starttls off`. Use a sender address authorized by your provider.
+
+For existing servers, publish and pull the updated image matching `PHP_VERSION`,
+then recreate/restart the container as described above. Installing packages on
+the host or in the installer container does not fix the runtime image. In the
+active `/home/container/php/php.ini` (or `PHP_INI` override), set:
+
+```ini
+sendmail_path = "/usr/sbin/sendmail --file=/home/container/.msmtprc -t -i"
+```
+
+Check custom PHP-FPM pools for `sendmail_path` overrides and restart PHP-FPM
+after changing its configuration. Existing PHP configuration is preserved during
+reinstall and runtime updates, so it must be updated manually.
+
+Verify `/usr/sbin/sendmail --version` inside the running container, then send a
+test message from your application's mail test screen using PHP `mail()` (or
+its “Sendmail” option). Check the container console for SMTP errors and confirm
+receipt; an accepted message does not guarantee inbox delivery. Alternatively,
+select your application's “SMTP server” option and configure the provider there
+directly; that bypasses `sendmail` and does not need this transport.
+
 ### Safe Log Cleanup
 
 The egg startup command runs `bash ./safe-start.sh`, a safe cleaner before launching the vendored
