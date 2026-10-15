@@ -271,6 +271,7 @@ fi
         self.assertIn("USER container", dockerfile)
         self.assertIn('ENTRYPOINT ["/entrypoint.sh"]', dockerfile)
         self.assertIn("IMAGE_PHP_VERSION=${PHP_VERSION}", dockerfile)
+        self.assertIn("openssh-client", dockerfile)
         self.assertNotIn("policy.xml", dockerfile)
         self.assertIn('php: ["8.2", "8.3", "8.4", "8.5"]', workflow)
         self.assertIn("platforms: linux/amd64,linux/arm64", workflow)
@@ -280,6 +281,20 @@ fi
         for instruction in dockerfile.replace("\\\n", "").splitlines():
             if instruction.startswith("RUN "):
                 subprocess.run(["sh", "-n", "-c", instruction[4:]], check=True)
+
+    def test_proc_open_is_not_disabled_by_default(self):
+        php_ini = (REPOSITORY / "php/php.ini").read_text()
+        for line in php_ini.splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == "disable_functions":
+                self.assertNotIn("proc_open", {name.strip() for name in value.split(",")})
+        for pool in (REPOSITORY / "php/pool.d").glob("*.conf"):
+            for line in pool.read_text().splitlines():
+                key, separator, value = line.partition("=")
+                if separator and key.strip() in (
+                    "php_value[disable_functions]", "php_admin_value[disable_functions]",
+                ):
+                    self.assertNotIn("proc_open", {name.strip() for name in value.split(",")})
 
 
 if __name__ == "__main__":
