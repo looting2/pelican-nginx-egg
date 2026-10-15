@@ -272,6 +272,7 @@ fi
         self.assertIn('ENTRYPOINT ["/entrypoint.sh"]', dockerfile)
         self.assertIn("IMAGE_PHP_VERSION=${PHP_VERSION}", dockerfile)
         self.assertIn("openssh-client", dockerfile)
+        self.assertIn("sshpass", dockerfile)
         self.assertNotIn("policy.xml", dockerfile)
         self.assertIn('php: ["8.2", "8.3", "8.4", "8.5"]', workflow)
         self.assertIn("platforms: linux/amd64,linux/arm64", workflow)
