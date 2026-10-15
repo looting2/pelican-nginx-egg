@@ -95,8 +95,8 @@ esac
         for path in BUNDLE:
             if path != "scripts":
                 self.assertTrue((self.root / path).exists(), path)
-        self.executable("php-fpm8.4", 'printf "php=%s\\n" "$*"\n')
-        self.executable("nginx", 'printf "nginx=%s\\n" "$*"\nexit 7\n')
+        self.executable("php-fpm8.4", 'printf "php=%s\\n" "$*"\nexec sleep 30\n')
+        self.executable("nginx", 'printf "nginx=%s\\n" "$*"\nsleep 2\nexit 7\n')
         result = self.run_script(
             REPOSITORY / "entrypoint.sh", check=False,
             STARTUP=EGG["startup_commands"]["Default"],
@@ -109,7 +109,62 @@ esac
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertIn("Services successfully launched", result.stdout)
         self.assertIn("nginx=-c", result.stdout)
+        self.assertIn("--nodaemonize", result.stdout)
+        self.assertIn("[Watchdog] nginx exited with status 7", result.stdout)
         self.assertTrue((self.root / "php/sessions").is_dir())
+
+    def start_services(self, **env):
+        return subprocess.Popen(
+            ["bash", str(REPOSITORY / "modules/nginx/start.sh")], cwd=self.root,
+            env={**self.environment, "PHP_VERSION": "8.4", "IMAGE_PHP_VERSION": "8.4",
+                 "PHP_INI": "php.ini", "PHP_FPM_CONF": "php-fpm.conf",
+                 "NGINX_CONF": "nginx.conf", "NGINX_PREFIX": str(self.root), **env},
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+
+    def test_crashed_php_fpm_is_restarted(self):
+        # The first PHP-FPM master is killed later, like an out-of-memory kill.
+        self.executable("php-fpm8.4", """
+count=$(( $(cat "$FIXTURES/fpm" 2>/dev/null || echo 0) + 1 ))
+echo "$count" > "$FIXTURES/fpm"
+if [[ "$count" == 1 ]]; then
+    sleep 30 & echo "$!" > "$FIXTURES/worker"
+    (sleep 2; kill -KILL $$) &
+fi
+exec sleep 30
+""")
+        self.executable("nginx", 'sleep 6\nexit 3\n')
+        self.environment["FIXTURES"] = str(self.workspace)
+        process = self.start_services()
+        output, _ = process.communicate(timeout=20)
+        self.assertEqual(process.returncode, 3, output)
+        self.assertIn("[Watchdog] PHP-FPM killed by SIGKILL", output)
+        self.assertIn("[Watchdog] PHP-FPM restarted", output)
+        self.assertEqual((self.workspace / "fpm").read_text(), "2\n")
+        # Workers orphaned by the killed master must not keep the socket.
+        worker = int((self.workspace / "worker").read_text())
+        with self.assertRaises(ProcessLookupError):
+            os.kill(worker, 0)
+
+    def test_repeated_php_fpm_crashes_stop_the_server(self):
+        self.executable("php-fpm8.4", 'sleep 1.2\nexit 70\n')
+        self.executable("nginx", 'exec sleep 30\n')
+        process = self.start_services(PHP_FPM_MAX_RESTARTS="2")
+        output, _ = process.communicate(timeout=20)
+        self.assertEqual(process.returncode, 1, output)
+        self.assertIn("PHP-FPM exited with status 70", output)
+        self.assertIn("crashed 3 times", output)
+
+    def test_stop_signal_stops_both_services(self):
+        self.executable("php-fpm8.4", 'exec sleep 30\n')
+        self.executable("nginx", 'exec sleep 30\n')
+        process = self.start_services()
+        while "Services successfully launched" not in process.stdout.readline():
+            pass
+        process.send_signal(2)
+        output, _ = process.communicate(timeout=10)
+        self.assertEqual(process.returncode, 0, output)
+        self.assertIn("[Shutdown] nginx and PHP-FPM stopped", output)
 
     def test_mismatched_image_version_fails_before_service_launch(self):
         self.install()

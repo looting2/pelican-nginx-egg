@@ -120,6 +120,14 @@ as normal startup, as it bypasses cleanup. The owned image entrypoint preserves
 startup whitespace and converts Pelican `{{VARIABLE}}` placeholders to shell
 environment-variable references without flattening the command.
 
+### PHP-FPM crashes ("111: Connection refused")
+
+PHP-FPM is supervised by `modules/nginx/start.sh` and restarted automatically if it
+dies; the console logs the exit status (for example `killed by SIGKILL`, usually the
+out-of-memory killer or the server's memory limit). See `modules/nginx/README.md`.
+Existing servers receive this through a forced release update or by uploading the
+new `modules/nginx/start.sh`; restart the server afterwards.
+
 Regression tests: `python3 -m unittest discover -s tests -v`.
 
 ### Release updates
