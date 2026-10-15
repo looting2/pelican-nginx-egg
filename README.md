@@ -44,7 +44,7 @@ The egg references `ghcr.io/looting2/pelican-nginx-egg:8.2-latest` through
    installer, updater, Dockerfile label and workflow tags before publishing.
 
 Local build: `docker build --build-arg PHP_VERSION=8.4 -t pelican-nginx:8.4 .`.
-The Debian-based image installs Nginx, PHP from Sury, Composer, Certbot, Cloudflared
+The Debian-based image installs Nginx, PHP from Sury, Composer, Certbot, Cloudflared, OpenSSH Client
 and an optional ionCube loader. Optional PHP extensions are installed when Sury
 provides packages; unavailable ones are reported during build. ionCube may not yet
 support every PHP version/architecture. ImageMagick's default security policy is
@@ -79,6 +79,39 @@ page is created at `www/index.php` (not a public `phpinfo()` page).
 | `LOGCLEANER_STATUS` | `1` | Enable (`1`/`true`) safe startup log cleanup; disable with `0`/`false` |
 | `CLOUDFLARED_STATUS` | `0` | Enable Cloudflare Tunnel (`1`) |
 | `CLOUDFLARED_TOKEN` | - | Your Cloudflare Tunnel token (starts with `ey...`) |
+
+### OpenSSH Client and PHP-FPM subprocesses
+
+The runtime image includes OpenSSH Client (`/usr/bin/ssh`), not an SSH server.
+For an existing deployment, publish updated images using **Publish PHP images**
+after merging the Dockerfile change into `main`. Select the image matching
+`PHP_VERSION` in Pelican, have Wings pull the updated tag, and recreate/restart
+the server container. This requires administrator/provider access; installing
+packages on the Wings host or in the egg's installer container does not install
+them in the running server. Runtime auto-updates do not update container images.
+
+`proc_open` is already allowed by the bundled PHP configuration. PHP-FPM loads
+`/home/container/php/php.ini` by default (or the `PHP_INI` override), rather than
+necessarily using the same configuration as CLI PHP. For existing servers:
+
+1. Back up the active PHP configuration. If `proc_open` appears in its
+   `disable_functions` list, remove only that entry; keep other restrictions.
+2. Check `/home/container/php/pool.d/*.conf` (or pools included by your custom
+   `PHP_FPM_CONF`) for `php_admin_value[disable_functions]` or
+   `php_value[disable_functions]` overrides that also disable `proc_open`.
+3. Restart the server to reload PHP-FPM. Reinstalling or updating the runtime
+   preserves existing PHP configuration, so it will not remove custom restrictions.
+
+Verify `/usr/bin/ssh -V` inside the running server container. Through a temporary,
+access-restricted PHP web endpoint, check `function_exists('proc_open')` and
+`ini_get('disable_functions')`; remove the endpoint immediately afterward.
+Checking CLI PHP alone does not verify PHP-FPM's settings.
+
+Use `/usr/bin/ssh` explicitly when launching it from PHP to avoid PHP-FPM PATH
+differences. Keep private keys outside `www`, restrict their permissions, and
+verify remote host keys using a trusted `known_hosts` file; do not disable host
+key checking. Only permit subprocess execution for trusted application code,
+and never pass untrusted input to a shell command.
 
 ### Safe Log Cleanup
 
