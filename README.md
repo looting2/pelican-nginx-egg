@@ -157,6 +157,23 @@ Check custom PHP-FPM pools for `sendmail_path` overrides and restart PHP-FPM
 after changing its configuration. Existing PHP configuration is preserved during
 reinstall and runtime updates, so it must be updated manually.
 
+If the application reports sendmail as missing even though
+`/usr/sbin/sendmail --version` works in the running container, check PHP-FPM's
+active `open_basedir`. PHP filesystem checks cannot see paths outside that list.
+The bundled configuration allows the executable and its resolved msmtp symlink
+target without granting access to all of `/usr`:
+
+```ini
+open_basedir = /home/container:/tmp:/usr/sbin/sendmail:/usr/bin/msmtp
+```
+
+For existing configurations, retain your current allowed paths and append
+`/usr/sbin/sendmail:/usr/bin/msmtp`. Check pool-level `open_basedir` overrides too,
+then restart the server. Do not disable `open_basedir` to fix detection.
+A fresh installation gets this setting, but reinstalling over an existing server
+preserves its PHP configuration. If the version command itself fails, the
+runtime image still needs to be updated; reinstalling server files is not enough.
+
 Verify `/usr/sbin/sendmail --version` inside the running container, then send a
 test message from your application's mail test screen using PHP `mail()` (or
 its “Sendmail” option). Check the container console for SMTP errors and confirm

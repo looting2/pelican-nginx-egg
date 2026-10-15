@@ -298,6 +298,43 @@ fi
         )
         self.assertNotIn("mail", {name.strip() for name in settings["disable_functions"].split(",")})
 
+    def test_php_can_detect_sendmail_without_allowing_other_system_files(self):
+        php_ini = (REPOSITORY / "php/php.ini").read_text()
+        basedir = next(
+            line.partition("=")[2].strip()
+            for line in php_ini.splitlines()
+            if line.partition("=")[0].strip() == "open_basedir"
+        )
+        allowed = basedir.split(":")
+        self.assertEqual(
+            allowed, ["/home/container", "/tmp", "/usr/sbin/sendmail", "/usr/bin/msmtp"]
+        )
+        php = shutil.which("php")
+        if not php:
+            self.skipTest("PHP CLI is required to exercise open_basedir")
+        transport = self.workspace / "transport"
+        transport.mkdir()
+        msmtp = transport / "msmtp"
+        msmtp.write_text("#!/bin/sh\nexit 0\n")
+        msmtp.chmod(0o755)
+        sendmail = self.bin / "sendmail"
+        sendmail.symlink_to(msmtp)
+        unrelated = transport / "msmtp-other"
+        unrelated.write_text("not allowed")
+        paths = {
+            "/home/container": self.root,
+            "/tmp": self.root / "tmp",
+            "/usr/sbin/sendmail": sendmail,
+            "/usr/bin/msmtp": msmtp,
+        }
+        result = subprocess.run(
+            [php, "-n", "-d", "open_basedir=" + ":".join(str(paths[p]) for p in allowed),
+             "-r", "echo json_encode([is_executable($argv[1]), @is_file($argv[2])]);",
+             str(sendmail), str(unrelated)],
+            capture_output=True, text=True, check=True, timeout=15,
+        )
+        self.assertEqual(json.loads(result.stdout), [True, False])
+
     def test_proc_open_is_not_disabled_by_default(self):
         php_ini = (REPOSITORY / "php/php.ini").read_text()
         for line in php_ini.splitlines():
