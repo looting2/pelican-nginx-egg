@@ -123,8 +123,9 @@ environment-variable references without flattening the command.
 ### PHP-FPM crashes ("111: Connection refused")
 
 PHP-FPM is supervised by `modules/nginx/start.sh` and restarted automatically if it
-dies; the console logs the exit status (for example `killed by SIGKILL`, usually the
-out-of-memory killer or the server's memory limit). See `modules/nginx/README.md`.
+dies (the console logs the exit status or signal) or if it keeps running but its
+socket stops accepting connections, for example because the socket file was replaced
+or moved. See `modules/nginx/README.md`.
 Existing servers receive this through a forced release update or by uploading the
 new `modules/nginx/start.sh`; restart the server afterwards.
 

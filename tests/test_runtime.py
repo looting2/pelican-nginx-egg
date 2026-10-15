@@ -153,7 +153,52 @@ exec sleep 30
         output, _ = process.communicate(timeout=20)
         self.assertEqual(process.returncode, 1, output)
         self.assertIn("PHP-FPM exited with status 70", output)
-        self.assertIn("crashed 3 times", output)
+        self.assertIn("failed 3 times", output)
+
+    def fake_listening_php_fpm(self, replace_after):
+        # Listens on the configured socket; optionally replaces the socket file while still running.
+        (self.root / "php-fpm.conf").write_text(f"[global]\ninclude={self.root}/pool.d/*.conf\n")
+        (self.root / "pool.d").mkdir()
+        (self.root / "pool.d/www.conf").write_text(f"[www]\nlisten = {self.workspace}/fpm.sock\n")
+        self.executable("php-fpm8.4", f"""
+count=$(( $(cat "{self.workspace}/fpm" 2>/dev/null || echo 0) + 1 ))
+echo "$count" > "{self.workspace}/fpm"
+exec python3 -c '
+import os, socket, sys, time
+path = sys.argv[1]
+if os.path.exists(path): os.unlink(path)
+server = socket.socket(socket.AF_UNIX); server.bind(path); server.listen()
+server.settimeout(0.2)
+started = time.time()
+while True:
+    try: server.accept()[0].close()
+    except socket.timeout: pass
+    if sys.argv[2] == "1" and time.time() - started > {replace_after}:
+        os.unlink(path)
+        stale = socket.socket(socket.AF_UNIX); stale.bind(path); stale.close()
+        sys.argv[2] = "0"
+' "{self.workspace}/fpm.sock" "$( [[ $count == 1 ]] && echo 1 || echo 0 )"
+""")
+
+    def test_running_php_fpm_with_replaced_socket_is_restarted(self):
+        self.fake_listening_php_fpm(replace_after=1)
+        self.executable("nginx", 'sleep 6\nexit 3\n')
+        process = self.start_services(PHP_FPM_HEALTHCHECK_INTERVAL="1")
+        output, _ = process.communicate(timeout=20)
+        self.assertEqual(process.returncode, 3, output)
+        self.assertIn("is running", output)
+        self.assertIn("nothing is listening on it", output)
+        self.assertIn("[Watchdog] PHP-FPM restarted", output)
+        self.assertEqual((self.workspace / "fpm").read_text(), "2\n")
+
+    def test_healthy_php_fpm_is_not_restarted(self):
+        self.fake_listening_php_fpm(replace_after=999)
+        self.executable("nginx", 'sleep 4\nexit 3\n')
+        process = self.start_services(PHP_FPM_HEALTHCHECK_INTERVAL="1")
+        output, _ = process.communicate(timeout=20)
+        self.assertEqual(process.returncode, 3, output)
+        self.assertNotIn("restarted", output)
+        self.assertEqual((self.workspace / "fpm").read_text(), "1\n")
 
     def test_stop_signal_stops_both_services(self):
         self.executable("php-fpm8.4", 'exec sleep 30\n')
