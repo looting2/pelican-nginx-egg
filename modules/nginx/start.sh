@@ -110,6 +110,7 @@ while true; do
   wait -n -p exited_pid "$NGINX_PID" "$PHP_FPM_PID"
   status=$?
   if ((stopping)); then
+    kill -TERM "$NGINX_PID" "$PHP_FPM_PID" 2>/dev/null
     wait "$NGINX_PID" "$PHP_FPM_PID" 2>/dev/null
     stop_php_fpm_workers
     log "${WHITE}[Shutdown] nginx and PHP-FPM stopped"
@@ -141,6 +142,7 @@ while true; do
     exit 1
   fi
   sleep 1
+  ((stopping)) && continue
   start_php_fpm
   log "${YELLOW}[Watchdog] PHP-FPM restarted (PID: ${PHP_FPM_PID})"
 done
