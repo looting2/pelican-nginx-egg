@@ -1,0 +1,20 @@
+services:
+  nginx:
+    image: ghcr.io/looting2/pelican-nginx-egg:8.4-latest
+    init: true
+    restart: unless-stopped
+    environment:
+      PHP_VERSION: "8.4"
+      AUTOUPDATE_STATUS: "0"
+      AUTOUPDATE_FORCE: "0"
+      TZ: UTC
+    ports:
+      - "8080:80"
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    volumes:
+      - type: bind
+        source: /mnt/user/appdata/pelican-nginx
+        target: /home/container
+        bind:
+          create_host_path: false

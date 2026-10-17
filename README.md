@@ -68,6 +68,84 @@ preserved on reinstall. Git deployment and WordPress are initialized only into a
 empty `www`; Git takes precedence if both are selected. Otherwise a simple welcome
 page is created at `www/index.php` (not a public `phpinfo()` page).
 
+### Unraid Docker Compose Manager (without Pelican)
+
+Use the included `compose.yaml` with Docker Compose v2. The image contains the
+software, **not the runtime files**: initialize the persistent directory before
+bringing up the stack. No Pelican Panel or Wings installation is needed.
+
+1. In an Unraid terminal, download this repository and select the PHP image:
+
+   ```bash
+   source_dir="$(mktemp -d /tmp/pelican-nginx.XXXXXX)"
+   curl -fL https://codeload.github.com/looting2/pelican-nginx-egg/tar.gz/refs/heads/main \
+     -o "$source_dir/source.tar.gz"
+   tar -xzf "$source_dir/source.tar.gz" -C "$source_dir" --strip-components=1
+   image=ghcr.io/looting2/pelican-nginx-egg:8.4-latest
+   docker pull "$image"
+   ```
+
+   The tag must be published and accessible (see **Publish the images first**).
+   If it is unavailable, build locally using the downloaded source instead:
+
+   ```bash
+   docker build --build-arg PHP_VERSION=8.4 -t "$image" "$source_dir"
+   ```
+
+2. Prepare a dedicated appdata directory and install the runtime using the existing
+   install helper. Run these commands in the same terminal:
+
+   ```bash
+   mkdir -p /mnt/user/appdata/pelican-nginx
+   docker run --rm --user 0:0 --entrypoint /bin/bash \
+     --mount "type=bind,source=$source_dir,target=/runtime,readonly" \
+     --mount type=bind,source=/mnt/user/appdata/pelican-nginx,target=/home/container \
+     "$image" -euc 'bash /runtime/scripts/install-runtime.sh /runtime /home/container manual
+   chown -R container:container /home/container'
+   ```
+
+   This installs `nginx/`, `php/`, `modules/`, the runtime helper, startup scripts,
+   and `LICENSE`, and creates `www/`, `logs/`, and `tmp/`. Back up an existing
+   installation and stop its stack before repeating this step: configuration and
+   site files are preserved, but runtime scripts are replaced and ownership of
+   the entire dedicated directory is reset.
+
+   Only initialization runs as root; the service runs as the image's non-root
+   `container` user. Ownership is resolved from the image, not a guessed UID.
+   **`PUID` and `PGID` are not supported.** Newly uploaded files must remain
+   readable by this user, with application upload/cache directories writable.
+   Do not use `chmod 777` to fix permissions.
+
+3. Create a stack in Unraid's Compose Manager and paste the contents of
+   `compose.yaml` from the downloaded source. Set `TZ` to your timezone.
+   The defaults mount `/mnt/user/appdata/pelican-nginx` at `/home/container`,
+   publish host port **8080** to container port **80**, disable runtime
+   auto-updates, and restart the service unless stopped. The namespaced sysctl
+   lets the non-root service bind port 80; privileged mode is not needed.
+   Change the host port if 8080 is already used by Unraid or another container.
+   Keep the image tag and `PHP_VERSION` matched if selecting another PHP version.
+   Do not override the entrypoint or run the service as root.
+
+4. Put your website (including an `index.php` or `index.html`) in
+   `/mnt/user/appdata/pelican-nginx/www`. Bring the stack up in Compose Manager
+   and visit `http://YOUR-UNRAID-IP:8080`. An empty `www` can return HTTP 403;
+   this helper does not create the Pelican installer's welcome page.
+
+   Alternatively, save the supplied Compose file to your stack directory and run
+   `docker compose -f /absolute/path/to/compose.yaml up -d`. For a locally built
+   image, use `up -d --pull never` and disable any automatic pulls in Compose
+   Manager. Inspect startup with `docker compose -f /absolute/path/to/compose.yaml logs nginx`;
+   access/error logs also live in the persistent `logs/` directory.
+
+`WORDPRESS=1` alone does **not** install WordPress during normal container startup.
+Deploy WordPress into `www` yourself and provide a separate MySQL/MariaDB database
+(use its service hostname, not `localhost`, when it is another container).
+Keep database credentials outside the Compose file and out of source control.
+Port 8080 serves plain HTTP; use a trusted reverse proxy or Cloudflare Tunnel for
+public HTTPS access, and avoid forwarding the HTTP port directly to the Internet.
+The downloaded `/tmp` source is only needed for setup/local builds; keep your
+Compose file and appdata on persistent storage.
+
 ## Configuration
 
 | Variable | Default | Description |
