@@ -13,6 +13,7 @@ not the original repository, images or version service.
 - 🔄 **Auto-Update**: Checks this fork's published GitHub releases; applying runtime updates is opt-in
 - 🧹 **LogCleaner**: Truncates oversized or old logs without touching temporary/runtime files (dry-run supported)
 - 🌱 **Git Module**: Auto `git pull` on restart
+- 📦 **Node.js and npm**: Available in the runtime image for JavaScript tooling
 - 📦 **Composer Module**: Installs packages from `composer.json` or a fallback variable
 - 🔐 **ionCube Loader**: Auto-detected and enabled for encrypted PHP
 - 🌐 **Cloudflare Tunnel**: Environment-token configuration and connection checks
@@ -44,9 +45,11 @@ The egg references `ghcr.io/looting2/pelican-nginx-egg:8.2-latest` through
    installer, updater, Dockerfile label and workflow tags before publishing.
 
 Local build: `docker build --build-arg PHP_VERSION=8.4 -t pelican-nginx:8.4 .`.
-The Debian-based image installs Nginx, PHP from Sury, Composer, Certbot, Cloudflared, OpenSSH Client
-and an optional ionCube loader. Optional PHP extensions are installed when Sury
-provides packages; unavailable ones are reported during build. ionCube may not yet
+The Debian-based image installs Nginx, PHP from Sury, Node.js, npm, Composer, Certbot,
+Cloudflared, OpenSSH Client and an optional ionCube loader. Existing servers need
+the updated image pulled and the container recreated to get Node.js and npm.
+Optional PHP extensions are installed when Sury provides packages; unavailable ones
+are reported during build. ionCube may not yet
 support every PHP version/architecture. ImageMagick's default security policy is
 not weakened. Builds still require these third-party package/download services;
 independence from the original egg does not mean offline installation.

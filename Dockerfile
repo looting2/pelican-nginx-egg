@@ -12,7 +12,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN set -eux; \
     case "$PHP_VERSION" in 8.2|8.3|8.4|8.5) ;; *) exit 1;; esac; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl gnupg git nginx \
+    apt-get install -y --no-install-recommends ca-certificates curl gnupg git nginx nodejs npm \
         unzip tar python3 certbot openssl openssh-client sshpass procps msmtp-mta; \
     test -x /usr/sbin/sendmail; \
     curl -fsSL https://packages.sury.org/php/apt.gpg -o /usr/share/keyrings/sury-php.gpg; \
