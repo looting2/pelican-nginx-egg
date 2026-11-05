@@ -54,9 +54,16 @@ class RuntimeTests(unittest.TestCase):
                 bundle.add(REPOSITORY / path, arcname=f"release/{path}")
         return archive
 
-    def mock_downloads(self, response='{"tag_name":"v1.0.0"}'):
+    def mock_downloads(self, commit="fedcba9876543210fedcba9876543210fedcba98"):
         self.archive()
-        (self.workspace / "release.json").write_text(response)
+        (self.workspace / "commit").write_text(commit)
+        self.executable("git", """
+printf '%s\\n' "$*" >> "$FIXTURES/git-requests"
+if [[ "$1" == ls-remote ]]; then
+    [[ "${FAIL_LS_REMOTE:-0}" != 1 ]] || exit 128
+    [[ -z "$(cat "$FIXTURES/commit")" ]] || printf '%s\\t%s\\n' "$(cat "$FIXTURES/commit")" "$3"
+fi
+""")
         self.executable("curl", """
 printf '%s\\n' "$*" >> "$FIXTURES/requests"
 output=""
@@ -70,7 +77,6 @@ while [[ $# -gt 0 ]]; do
 done
 if [[ "${FAIL_DOWNLOAD:-0}" == 1 ]]; then exit 22; fi
 case "$url" in
-    */releases/latest) cp "$FIXTURES/release.json" "$output";;
     *wordpress*) cp "$FIXTURES/wordpress.tar.gz" "$output";;
     *codeload.github.com/looting2/pelican-nginx-egg/*) cp "$FIXTURES/runtime.tar.gz" "$output";;
     *) exit 99;;
@@ -136,7 +142,7 @@ esac
             self.assertEqual((self.root / path).read_text(), "keep")
         self.assertEqual((self.root / "VERSION").read_text(), "reinstalled\n")
 
-    def test_released_update_keeps_config_site_logs_and_runtime(self):
+    def test_branch_update_keeps_config_site_logs_and_runtime(self):
         self.install()
         self.mock_downloads()
         for path in ("www/index.php", "nginx/nginx.conf", "php/php.ini", "logs/access.log", "tmp/session"):
@@ -146,26 +152,40 @@ esac
             AUTOUPDATE_STATUS="1", AUTOUPDATE_FORCE="1",
         )
         self.assertIn("Updated runtime", result.stdout)
-        self.assertEqual((self.root / "VERSION").read_text(), "v1.0.0\n")
+        self.assertEqual((self.root / "VERSION").read_text(), "fedcba9876543210fedcba9876543210fedcba98\n")
         for path in ("www/index.php", "nginx/nginx.conf", "php/php.ini", "logs/access.log", "tmp/session"):
             self.assertEqual((self.root / path).read_text(), "keep")
         self.assertFalse((self.root / ".runtime-update").exists())
+        git_requests = (self.workspace / "git-requests").read_text()
+        self.assertIn("ls-remote https://github.com/looting2/pelican-nginx-egg.git HEAD", git_requests)
         requests = (self.workspace / "requests").read_text()
-        self.assertIn("repos/looting2/pelican-nginx-egg/releases/latest", requests)
-        self.assertIn("refs/tags/v1.0.0", requests)
+        self.assertIn("codeload.github.com/looting2/pelican-nginx-egg/tar.gz/fedcba9876543210fedcba9876543210fedcba98", requests)
+        self.assertNotIn("releases", requests)
         self.assertNotIn("Ym0T", requests)
+
+    def test_branch_update_uses_selected_branch(self):
+        self.install()
+        self.mock_downloads()
+        self.run_script(
+            self.root / "modules/autoupdate/start.sh",
+            AUTOUPDATE_STATUS="1", AUTOUPDATE_BRANCH="dev",
+        )
+        git_requests = (self.workspace / "git-requests").read_text()
+        self.assertIn("pelican-nginx-egg.git refs/heads/dev", git_requests)
 
     def test_update_check_only_same_version_and_failure_are_nonfatal(self):
         self.install()
-        for response, env in (
-            ('{"tag_name":"v1.0.0"}', {}),
-            ('{"tag_name":"original"}', {"AUTOUPDATE_FORCE": "1"}),
-            ('not json', {"AUTOUPDATE_FORCE": "1"}),
-            ('{"tag_name":"../bad"}', {"AUTOUPDATE_FORCE": "1"}),
-            ('{}', {"FAIL_DOWNLOAD": "1", "AUTOUPDATE_FORCE": "1"}),
+        for commit, env in (
+            ("fedcba9876543210fedcba9876543210fedcba98", {}),
+            ("original", {"AUTOUPDATE_FORCE": "1"}),
+            ("", {"AUTOUPDATE_FORCE": "1"}),
+            ("not-a-commit", {"AUTOUPDATE_FORCE": "1"}),
+            ("fedcba9876543210fedcba9876543210fedcba98", {"FAIL_LS_REMOTE": "1", "AUTOUPDATE_FORCE": "1"}),
+            ("fedcba9876543210fedcba9876543210fedcba98", {"FAIL_DOWNLOAD": "1", "AUTOUPDATE_FORCE": "1"}),
+            ("fedcba9876543210fedcba9876543210fedcba98", {"AUTOUPDATE_BRANCH": "../bad", "AUTOUPDATE_FORCE": "1"}),
         ):
-            with self.subTest(response=response, env=env):
-                self.mock_downloads(response)
+            with self.subTest(commit=commit, env=env):
+                self.mock_downloads(commit)
                 self.run_script(
                     self.root / "modules/autoupdate/start.sh",
                     AUTOUPDATE_STATUS="1", **env,

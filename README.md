@@ -10,7 +10,7 @@ not the original repository, images or version service.
 
 ## Features
 
-- 🔄 **Auto-Update**: Checks this fork's published GitHub releases; applying runtime updates is opt-in
+- 🔄 **Auto-Update**: Checks this fork's branch for new commits; applying runtime updates is opt-in
 - 🧹 **LogCleaner**: Truncates oversized or old logs without touching temporary/runtime files (dry-run supported)
 - 🌱 **Git Module**: Auto `git pull` on restart
 - 📦 **Composer Module**: Installs packages from `composer.json` or a fallback variable
@@ -73,7 +73,8 @@ page is created at `www/index.php` (not a public `phpinfo()` page).
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `AUTOUPDATE_STATUS` | `1` | Enable (`1`) or disable (`0`) auto-update checks |
-| `AUTOUPDATE_FORCE` | `0` | Opt in to applying released runtime scripts (`1`) or just check (`0`) |
+| `AUTOUPDATE_FORCE` | `0` | Opt in to applying new branch commits' runtime scripts (`1`) or just check (`0`) |
+| `AUTOUPDATE_BRANCH` | - | Branch to track; empty = the repository's default branch |
 | `PHP_VERSION` | - | **Required**. Must match the Docker image tag (e.g., `8.4`) |
 | `WORDPRESS` | `0` | Set to `1` to install WordPress automatically |
 | `LOGCLEANER_STATUS` | `1` | Enable (`1`/`true`) safe startup log cleanup; disable with `0`/`false` |
@@ -182,7 +183,7 @@ that do not end in `.log` are not cleaned. Continuous log growth still requires
 separate log rotation.
 
 The wrapper disables a second LogCleaner run for the rest of startup, including
-after release updates. The legacy destructive cleaner has been removed.
+after runtime updates. The legacy destructive cleaner has been removed.
 
 #### Testing on an existing server (no reinstall required)
 
@@ -206,20 +207,20 @@ environment-variable references without flattening the command.
 
 Regression tests: `python3 -m unittest discover -s tests -v`.
 
-### Release updates
+### Branch updates
 
-Create a **published, non-prerelease GitHub release in this repository** to offer
-runtime updates. With `AUTOUPDATE_STATUS=1`, startup queries GitHub's latest release.
-No releases, rate limits, or download failure leave the runtime alone. With
-`AUTOUPDATE_FORCE=0` (default) it only reports availability. With `1`, it replaces
-modules, orchestration, safe wrapper, helper and license, then records the release
-tag in `VERSION`. It does **not** change `www`, Nginx/PHP configuration, certificates,
-logs, `tmp`, or container images. Back up customized modules/scripts before opting in.
-New installs track the default-branch commit; the first release check can therefore
-report a release even if that commit already contains its changes. Forced updates
-select the latest published release, not necessarily the newest default-branch code.
+Runtime updates follow **this repository's branch**, not releases. With
+`AUTOUPDATE_STATUS=1`, startup resolves the newest commit of the default branch
+(or `AUTOUPDATE_BRANCH`) with `git ls-remote` and compares it with `VERSION`, which
+the installer also fills with a commit hash. Network failures or an unknown branch
+leave the runtime alone. With `AUTOUPDATE_FORCE=0` (default) it only reports a new
+commit. With `1`, it downloads that commit, replaces modules, orchestration, safe
+wrapper, helper and license, then records the commit in `VERSION`. It does **not**
+change `www`, Nginx/PHP configuration, certificates, logs, `tmp`, or container images.
+Back up customized modules/scripts before opting in. Every commit pushed to the
+tracked branch is picked up on the next restart, so keep that branch deployable.
 Image upgrades require selecting/re-pulling a published image and restarting.
-Config changes in releases must be reviewed and applied manually.
+Config changes must be reviewed and applied manually.
 
 ### Migrate an existing server off the original runtime
 
@@ -230,8 +231,8 @@ Config changes in releases must be reviewed and applied manually.
    this repository's `modules/`, `scripts/install-runtime.sh`, `start-modules.sh`,
    `safe-start.sh` and `LICENSE`, replacing the old runtime scripts. Keep your
    existing `nginx/`, `php/`, `www/`, certificates, logs and `tmp/`.
-   Record the downloaded revision in `VERSION` or leave it absent for check-only
-   release detection. The orchestrator invokes uploaded scripts through Bash, so
+   Record the downloaded commit hash in `VERSION` or leave it absent for check-only
+   update detection. The orchestrator invokes uploaded scripts through Bash, so
    file-manager uploads do not require preserving executable bits.
 4. Import/update the egg, explicitly apply `bash ./safe-start.sh` to this server,
    select this fork's matching PHP image, and set `AUTOUPDATE_FORCE=0`.

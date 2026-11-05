@@ -139,7 +139,7 @@
         {
             "sort": null,
             "name": "Enable Auto-Update",
-            "description": "Check this fork’s latest published GitHub release at startup (1/true = enabled). No releases or network failure leaves the runtime unchanged.",
+            "description": "Check this fork’s branch for a new commit at startup (1/true = enabled). Network failure leaves the runtime unchanged.",
             "env_variable": "AUTOUPDATE_STATUS",
             "default_value": "1",
             "user_viewable": true,
@@ -230,7 +230,7 @@
         {
             "sort": null,
             "name": "Force Auto-Update",
-            "description": "Apply this fork’s released runtime scripts automatically (1/true). Default 0 checks only. Back up first: scripts/modules are replaced; nginx/php config, site, logs and tmp are preserved. Image upgrades are manual.",
+            "description": "Apply runtime scripts from this fork’s newest branch commit automatically (1/true). Default 0 checks only. Back up first: scripts/modules are replaced; nginx/php config, site, logs and tmp are preserved. Image upgrades are manual.",
             "env_variable": "AUTOUPDATE_FORCE",
             "default_value": "0",
             "user_viewable": true,
@@ -238,6 +238,20 @@
             "rules": [
                 "required",
                 "boolean"
+            ]
+        },
+        {
+            "sort": null,
+            "name": "Auto-Update Branch",
+            "description": "Optional branch of this fork to update from. Leave empty to follow the repository's default branch.",
+            "env_variable": "AUTOUPDATE_BRANCH",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": [
+                "nullable",
+                "string",
+                "regex:/^[A-Za-z0-9][A-Za-z0-9._\\/-]*$/"
             ]
         },
         {

@@ -9,23 +9,25 @@ stage="$root/.runtime-update"
 mkdir "$stage"
 trap 'rm -rf -- "$stage"' EXIT
 
-# Only published releases of this fork are eligible, never upstream or moving main.
-if ! curl --fail --silent --show-error --location --connect-timeout 10 --max-time 60 \
-    https://api.github.com/repos/looting2/pelican-nginx-egg/releases/latest -o "$stage/release.json"; then
-    echo "[AutoUpdate] Release lookup unavailable (or no releases); keeping installed runtime."
-    exit 0
+# Track the newest commit of this fork's branch (default branch unless AUTOUPDATE_BRANCH is set).
+repository="https://github.com/looting2/pelican-nginx-egg"
+branch="${AUTOUPDATE_BRANCH:-}"
+if [[ -n "$branch" ]]; then
+    [[ "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$branch" != *..* ]] || { echo "[AutoUpdate] Invalid branch name; skipping."; exit 0; }
+    ref="refs/heads/$branch"
+else
+    ref="HEAD"
 fi
-if ! version="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("tag_name", ""))' "$stage/release.json" 2>/dev/null)"; then
-    echo "[AutoUpdate] Invalid release response; keeping installed runtime."
-    exit 0
+if ! version="$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$repository.git" "$ref" 2>/dev/null | cut -f1 | head -n1)"; then
+    version=""
 fi
-[[ "$version" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "[AutoUpdate] Invalid release tag; skipping."; exit 0; }
+[[ "$version" =~ ^[0-9a-f]{40}$ ]] || { echo "[AutoUpdate] Cannot resolve branch ${branch:-default} commit; keeping installed runtime."; exit 0; }
 installed="$(cat VERSION 2>/dev/null || true)"
-[[ "$installed" != "$version" ]] || { echo "[AutoUpdate] Already on $version."; exit 0; }
-echo "[AutoUpdate] Release $version available (installed: ${installed:-unknown})."
+[[ "$installed" != "$version" ]] || { echo "[AutoUpdate] Already on ${branch:-default branch} commit ${version:0:12}."; exit 0; }
+echo "[AutoUpdate] New ${branch:-default branch} commit ${version:0:12} available (installed: ${installed:-unknown})."
 [[ "${AUTOUPDATE_FORCE:-0}" =~ ^(true|1)$ ]] || { echo "[AutoUpdate] Check-only mode; no files changed."; exit 0; }
 if ! curl --fail --silent --show-error --location --connect-timeout 10 --max-time 180 \
-    "https://codeload.github.com/looting2/pelican-nginx-egg/tar.gz/refs/tags/$version" -o "$stage/runtime.tar.gz"; then
+    "https://codeload.github.com/looting2/pelican-nginx-egg/tar.gz/$version" -o "$stage/runtime.tar.gz"; then
     echo "[AutoUpdate] Download failed; keeping installed runtime."
     exit 0
 fi
