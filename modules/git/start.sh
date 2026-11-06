@@ -100,5 +100,10 @@ after="$(git rev-parse --short HEAD)"
 if [[ "$before" == "$after" ]]; then
     echo "[Git] Already up to date at $after ($branch)."
 else
-    echo "[Git] Updated $before -> $after ($branch)."
+    echo "[Git] Updated $before..$after ($branch)"
+    if [[ "$before" != none ]]; then
+        # Like `git pull`: the new commits, then a +/- summary per changed file.
+        git --no-pager log --oneline --no-decorate -n 15 "$before..$after" 2>/dev/null | sed 's/^/[Git]   /' || true
+        git --no-pager diff --stat=100 --stat-count=40 --color=always "$before" "$after" 2>/dev/null || true
+    fi
 fi

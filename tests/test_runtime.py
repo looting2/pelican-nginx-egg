@@ -314,7 +314,11 @@ fi
         self.assertIn("Already up to date", self.run_git_module(remote).stdout)
 
         self.commit(work, "v2")
-        self.assertIn("Updated", self.run_git_module(remote).stdout)
+        result = self.run_git_module(remote)
+        self.assertIn("Updated", result.stdout)
+        self.assertIn("v2", result.stdout)  # commit subject
+        self.assertIn("index.php", result.stdout)  # diffstat
+        self.assertIn("1 file changed", result.stdout)
         self.assertEqual((self.root / "www/index.php").read_text(), "v2")
 
         self.git("checkout", "-q", "-b", "staging", cwd=work)
