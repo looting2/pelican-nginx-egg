@@ -40,10 +40,17 @@ if is_enabled "$AUTOUPDATE_STATUS" && [[ -f "modules/autoupdate/start.sh" ]]; th
   bash modules/autoupdate/start.sh
 fi
 
-# 3) Execute other modules (except autoupdate, logcleaner and nginx)
+# 3) Update the site from Git before modules that use it (Composer, cron)
+GIT_STATUS="${GIT_STATUS:-false}"
+if is_enabled "$GIT_STATUS" && [[ -f "modules/git/start.sh" ]]; then
+  header "Running module: git"
+  bash modules/git/start.sh
+fi
+
+# 4) Execute other modules (except autoupdate, logcleaner, git and nginx)
 for module_dir in modules/*/; do
   module_name=$(basename "$module_dir")
-  [[ "$module_name" == "autoupdate" || "$module_name" == "logcleaner" || "$module_name" == "nginx" ]] && continue
+  [[ "$module_name" == "autoupdate" || "$module_name" == "logcleaner" || "$module_name" == "git" || "$module_name" == "nginx" ]] && continue
   start_script="${module_dir}start.sh"
   status_var="${module_name^^}_STATUS"
   status="$(printenv "$status_var" || true)"
@@ -60,7 +67,7 @@ for module_dir in modules/*/; do
   fi
 done
 
-# 4) Run nginx module last (blocking)
+# 5) Run nginx module last (blocking)
 NGINX_STATUS="${NGINX_STATUS:-true}"
 if is_enabled "$NGINX_STATUS"; then
   header "Running module: nginx"

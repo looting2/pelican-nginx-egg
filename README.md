@@ -12,7 +12,7 @@ not the original repository, images or version service.
 
 - 🔄 **Auto-Update**: Checks this fork's branch for new commits; applying runtime updates is opt-in
 - 🧹 **LogCleaner**: Truncates oversized or old logs without touching temporary/runtime files (dry-run supported)
-- 🌱 **Git Module**: Auto `git pull` on restart
+- 🌱 **Git Module**: Deploys your site repository into `www` and pulls the configured branch on every start
 - 📦 **Composer Module**: Installs packages from `composer.json` or a fallback variable
 - 🔐 **ionCube Loader**: Auto-detected and enabled for encrypted PHP
 - 🌐 **Cloudflare Tunnel**: Environment-token configuration and connection checks
@@ -65,7 +65,8 @@ archive, extracts only the runtime bundle, and installs `nginx/`, `php/`, all `m
 `safe-start.sh`, the runtime install helper and `LICENSE`. It records the commit in
 `VERSION`. `www`, existing Nginx/PHP configuration, logs and runtime files are
 preserved on reinstall. Git deployment and WordPress are initialized only into an
-empty `www`; Git takes precedence if both are selected. Otherwise a simple welcome
+empty `www`; Git takes precedence if both are selected. With `GIT_STATUS=1`, the Git
+module also clones on a later start if `www` only holds the welcome page. Otherwise a simple welcome
 page is created at `www/index.php` (not a public `phpinfo()` page).
 
 ## Configuration

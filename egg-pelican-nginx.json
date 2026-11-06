@@ -204,7 +204,7 @@
         {
             "sort": null,
             "name": "Enable Git Module",
-            "description": "Set to true to enable the Git update module, or false to disable it.",
+            "description": "Pull the website from Git into www on every start (1/true = enabled). Clones into an empty www or over the default welcome page; never over an existing site. Uncommitted edits to tracked files block the update instead of being overwritten.",
             "env_variable": "GIT_STATUS",
             "default_value": "0",
             "user_viewable": true,
@@ -270,7 +270,7 @@
         {
             "sort": null,
             "name": "Git Branch",
-            "description": "Optional branch cloned for a new empty site. Runtime updates fast-forward this branch; do not use to switch an existing checkout.",
+            "description": "Optional branch to install and update from. Leave empty to use the repository's default branch. Changing it switches www to that branch on the next start.",
             "env_variable": "GIT_BRANCH",
             "default_value": "",
             "user_viewable": true,
@@ -283,7 +283,7 @@
         {
             "sort": null,
             "name": "Git Repo Address",
-            "description": "Website Git repository URL to clone into an empty www directory. Example: https://github.com/your-account/your-website.git",
+            "description": "Website Git repository URL to deploy into www. Example: https://github.com/your-account/your-website.git. Changing it points www at the new repository on the next start.",
             "env_variable": "GIT_ADDRESS",
             "default_value": "",
             "user_viewable": true,

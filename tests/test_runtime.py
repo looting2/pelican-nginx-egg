@@ -270,9 +270,84 @@ fi
             self.root / "modules/git/start.sh", GIT_STATUS="1",
             GIT_DIR=str(self.root / "www"), USERNAME="test", ACCESS_TOKEN="fixture-value",
         )
-        self.assertIn("Pull failed", result.stdout)
+        self.assertIn("Fetch failed", result.stdout)
         self.assertNotIn("fixture-value", result.stdout + result.stderr)
         self.assertFalse((self.root / ".pelican-git").exists())
+
+    def git(self, *args, cwd=None):
+        return subprocess.run(
+            ["git", *args], cwd=cwd or self.workspace, check=True, capture_output=True, text=True,
+            env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"},
+        ).stdout.strip()
+
+    def site_repository(self):
+        remote = self.workspace / "site.git"
+        work = self.workspace / "site-work"
+        self.git("init", "-q", "--bare", "--initial-branch=main", str(remote))
+        self.git("clone", "-q", str(remote), str(work))
+        self.git("checkout", "-q", "-b", "main", cwd=work)
+        (work / "index.php").write_text("v1")
+        self.git("add", ".", cwd=work)
+        self.git("commit", "-q", "-m", "v1", cwd=work)
+        self.git("push", "-q", "origin", "main", cwd=work)
+        return remote, work
+
+    def commit(self, work, content, branch="main"):
+        (work / "index.php").write_text(content)
+        self.git("commit", "-q", "-am", content, cwd=work)
+        self.git("push", "-q", "origin", branch, cwd=work)
+
+    def run_git_module(self, remote, **env):
+        return self.run_script(
+            REPOSITORY / "modules/git/start.sh", GIT_STATUS="1",
+            GIT_DIR=str(self.root / "www"), GIT_ADDRESS=str(remote), **env,
+        )
+
+    def test_git_clones_over_welcome_page_then_follows_branch(self):
+        remote, work = self.site_repository()
+        (self.root / "www").mkdir()
+        (self.root / "www/index.php").write_text('<?php echo "Pelican Nginx is ready."; ?>\n')
+        result = self.run_git_module(remote)
+        self.assertIn("Cloned", result.stdout)
+        self.assertEqual((self.root / "www/index.php").read_text(), "v1")
+        self.assertIn("Already up to date", self.run_git_module(remote).stdout)
+
+        self.commit(work, "v2")
+        self.assertIn("Updated", self.run_git_module(remote).stdout)
+        self.assertEqual((self.root / "www/index.php").read_text(), "v2")
+
+        self.git("checkout", "-q", "-b", "staging", cwd=work)
+        self.commit(work, "staging", branch="staging")
+        result = self.run_git_module(remote, GIT_BRANCH="staging")
+        self.assertIn("(staging)", result.stdout)
+        self.assertEqual((self.root / "www/index.php").read_text(), "staging")
+        self.assertFalse((self.root / ".pelican-git").exists())
+
+    def test_git_never_clones_over_an_existing_site(self):
+        remote, _ = self.site_repository()
+        (self.root / "www").mkdir()
+        (self.root / "www/index.php").write_text("my site")
+        result = self.run_git_module(remote)
+        self.assertIn("not cloning over them", result.stdout)
+        self.assertEqual((self.root / "www/index.php").read_text(), "my site")
+        self.assertFalse((self.root / "www/.git").exists())
+
+    def test_git_update_keeps_conflicting_local_edits(self):
+        remote, work = self.site_repository()
+        self.run_git_module(remote)
+        (self.root / "www/index.php").write_text("local edit")
+        self.commit(work, "v2")
+        result = self.run_git_module(remote)
+        self.assertIn("blocked by local changes", result.stdout)
+        self.assertEqual((self.root / "www/index.php").read_text(), "local edit")
+
+    def test_git_failure_shows_error_without_url_credentials(self):
+        result = self.run_git_module(
+            "https://user:fixture-secret@127.0.0.1:9/missing.git", ACCESS_TOKEN="fixture-secret",
+        )
+        self.assertIn("Clone failed", result.stdout)
+        self.assertNotIn("fixture-secret", result.stdout + result.stderr)
 
     def test_update_replaces_script_inode_without_changing_open_script(self):
         self.install()
