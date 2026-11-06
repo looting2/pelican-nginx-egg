@@ -7,8 +7,10 @@ Composer and cron so they see the updated code.
 ## Behaviour
 
 - **No checkout yet:** clones `GIT_ADDRESS` into `www` if it is empty or holds only
-  the installer's welcome page. A `www` with any other files is never cloned over;
-  move them away (back up first) and restart.
+  the installer's welcome page. A `www` with other files is not cloned over unless
+  `GIT_OVERWRITE=1`: then the repository is copied on top of it, replacing files
+  with the same name and keeping all others (back up first). Otherwise move the
+  files away and restart.
 - **Existing checkout:** points `origin` at `GIT_ADDRESS` (if set), fetches
   `GIT_BRANCH` (or the current branch, or the remote's default branch) and checks
   it out with `git checkout -B`, so `www` matches the remote branch. Changing
@@ -27,6 +29,7 @@ Composer and cron so they see the updated code.
 | `GIT_STATUS` | `0` | Enable the module |
 | `GIT_ADDRESS` | empty | Website repository URL |
 | `GIT_BRANCH` | empty | Branch to deploy; empty = current/default branch |
+| `GIT_OVERWRITE` | `0` | First clone only: copy the repo over existing files in `www` |
 | `GIT_DIR` | `/home/container/www` | Folder to deploy into |
 | `USERNAME`, `ACCESS_TOKEN` | empty | HTTPS credentials for private repositories (use a personal access token) |
 

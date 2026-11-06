@@ -282,6 +282,19 @@
         },
         {
             "sort": null,
+            "name": "Git Copy Over Existing Files",
+            "description": "Only used when www has files but is not yet a Git checkout. 1/true = clone and copy the repository on top of www: files with the same name are replaced, all other files are kept. Back up www first. 0 = refuse to clone.",
+            "env_variable": "GIT_OVERWRITE",
+            "default_value": "0",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": [
+                "required",
+                "boolean"
+            ]
+        },
+        {
+            "sort": null,
             "name": "Git Repo Address",
             "description": "Website Git repository URL to deploy into www. Example: https://github.com/your-account/your-website.git. Changing it points www at the new repository on the next start.",
             "env_variable": "GIT_ADDRESS",

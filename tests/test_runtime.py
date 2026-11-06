@@ -333,6 +333,20 @@ fi
         self.assertEqual((self.root / "www/index.php").read_text(), "my site")
         self.assertFalse((self.root / "www/.git").exists())
 
+    def test_git_copy_over_replaces_same_names_and_keeps_others(self):
+        remote, work = self.site_repository()
+        (self.root / "www").mkdir()
+        (self.root / "www/index.php").write_text("old site")
+        (self.root / "www/uploads.txt").write_text("keep")
+        result = self.run_git_module(remote, GIT_OVERWRITE="1")
+        self.assertIn("Copying repository over existing files", result.stdout)
+        self.assertEqual((self.root / "www/index.php").read_text(), "v1")
+        self.assertEqual((self.root / "www/uploads.txt").read_text(), "keep")
+        self.commit(work, "v2")
+        self.assertIn("Updated", self.run_git_module(remote).stdout)
+        self.assertEqual((self.root / "www/index.php").read_text(), "v2")
+        self.assertEqual((self.root / "www/uploads.txt").read_text(), "keep")
+
     def test_git_update_keeps_conflicting_local_edits(self):
         remote, work = self.site_repository()
         self.run_git_module(remote)

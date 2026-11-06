@@ -41,11 +41,16 @@ if [[ ! -d "$git_dir/.git" ]]; then
     mkdir -p -- "$git_dir"
     # Only clone over an empty www or the installer's welcome page; never over a real site.
     mapfile -t existing < <(ls -A -- "$git_dir")
-    if (( ${#existing[@]} > 1 )) || { (( ${#existing[@]} == 1 )) && \
-        ! { [[ "${existing[0]}" == index.php ]] && [[ "$(cat -- "$git_dir/index.php")" == "$welcome" ]]; }; }; then
-        echo "[Git] $git_dir already has files and is not a Git checkout; not cloning over them."
-        echo "[Git] Move or delete its contents (back up first), then restart to clone $repository."
-        exit 0
+    only_welcome=0
+    (( ${#existing[@]} != 1 )) || [[ "${existing[0]}" != index.php || "$(cat -- "$git_dir/index.php")" != "$welcome" ]] || only_welcome=1
+    copy_over=0
+    if (( ${#existing[@]} > 0 && only_welcome == 0 )); then
+        if [[ ! "${GIT_OVERWRITE:-0}" =~ ^(true|1)$ ]]; then
+            echo "[Git] $git_dir already has files and is not a Git checkout; not cloning over them."
+            echo "[Git] Move or delete its contents (back up first), or enable Git Copy Over Existing Files, then restart."
+            exit 0
+        fi
+        copy_over=1
     fi
     branch_args=()
     [[ -z "$branch" ]] || branch_args=(--branch "$branch" --single-branch)
@@ -55,7 +60,11 @@ if [[ ! -d "$git_dir/.git" ]]; then
         echo "[Git] Clone failed; check repository address, branch and credentials (site preserved)."
         exit 0
     fi
-    rm -f -- "$git_dir/index.php"
+    if (( copy_over )); then
+        echo "[Git] Copying repository over existing files: same-named files are replaced, others are kept."
+    else
+        rm -f -- "$git_dir/index.php"
+    fi
     cp -a -- "$stage/src/." "$git_dir/"
     echo "[Git] Cloned $(git -C "$git_dir" rev-parse --short HEAD)."
     exit 0
